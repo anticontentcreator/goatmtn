@@ -1,0 +1,15 @@
+target/
+bin/
+obj/
+.venv/
+__pycache__/
+*.onnx
+replays/*.bin
+Directory.Build.props.user
+.env
+local.props
+*.key
+*.log
+.vs/
+*.user
+*.pem

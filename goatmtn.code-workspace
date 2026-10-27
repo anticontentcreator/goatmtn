@@ -1,0 +1,11 @@
+{
+  "folders": [
+    { "name": "root", "path": "." },
+    { "name": "coordinator (Rust)", "path": "coordinator" },
+    { "name": "plugin (C#)", "path": "plugin" },
+    { "name": "sim (Python)", "path": "sim" }
+  ],
+  "settings": {
+    "files.exclude": { "**/target": true, "**/bin": true, "**/obj": true, "**/__pycache__": true }
+  }
+}

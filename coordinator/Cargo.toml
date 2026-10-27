@@ -1,0 +1,7 @@
+[package]
+name = "coordinator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Added in Phase 1: tokio, tokio-tungstenite, serde, serde_json

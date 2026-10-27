@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug coordinator",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/coordinator/target/debug/coordinator.exe",
+      "cwd": "${workspaceFolder}/coordinator",
+      "preLaunchTask": "rust: build"
+    }
+  ]
+}
