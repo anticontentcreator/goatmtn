@@ -8,9 +8,12 @@
 //! - Key is (boot_id, id): the same net.ID in a new boot is a different NPC.
 //! - Spawned is idempotent (plugin re-sends it for live NPCs after a reconnect);
 //!   the first spawn_ts wins.
+//! - Killed is self-contained: it carries the spawn facts, so a kill of an NPC the
+//!   store never saw is still scored from the message. Facts recorded at spawn win
+//!   when the store did see the spawn.
 //! - A killed NPC is remembered so a stale re-sent Spawned cannot resurrect it
 //!   and award twice.
-//! - Unknown IDs and duplicate kills are ignored, never a panic.
+//! - Duplicate kills are ignored, never a panic.
 
 use std::collections::{HashMap, HashSet};
 
@@ -32,6 +35,9 @@ pub enum Event {
     },
     Killed {
         key: NpcKey,
+        prefab: String,
+        loadout: String,
+        spawn_ts: f64,
         killer: Option<u64>,
         death_ts: f64,
     },
@@ -62,7 +68,7 @@ impl NpcStore {
         }
     }
 
-    /// Apply one event. Returns an Award only for a player kill of a known, live NPC.
+    /// Apply one event. Returns an Award only for a player kill that has not been scored before.
     pub fn apply(&mut self, ev: Event) -> Option<Award> {
         match ev {
             Event::Spawned {
@@ -85,13 +91,25 @@ impl NpcStore {
             }
             Event::Killed {
                 key,
+                prefab,
+                loadout,
+                spawn_ts,
                 killer,
                 death_ts,
             } => {
-                let facts = self.alive.remove(&key);
-                self.finished.insert(key);
-                // Unknown ID (e.g. missed the spawn) or duplicate kill: nothing to score.
-                let facts = facts?;
+                // Already scored or despawned: ignore duplicates.
+                if !self.finished.insert(key.clone()) {
+                    return None;
+                }
+                // Facts recorded at spawn win; otherwise use the facts carried by the kill.
+                let facts = match self.alive.remove(&key) {
+                    Some(f) => f,
+                    None => NpcFacts {
+                        prefab,
+                        loadout,
+                        spawn_ts,
+                    },
+                };
                 score_kill(
                     &self.cfg,
                     &KillFacts {
@@ -151,6 +169,9 @@ mod tests {
     fn killed(k: NpcKey, killer: Option<u64>, death_ts: f64) -> Event {
         Event::Killed {
             key: k,
+            prefab: "rhib".to_string(),
+            loadout: "Science".to_string(),
+            spawn_ts: 1000.0,
             killer,
             death_ts,
         }
@@ -187,11 +208,32 @@ mod tests {
     }
 
     #[test]
-    fn kill_of_unknown_id_is_ignored() {
+    fn kill_of_unseen_npc_scores_from_the_kill_message() {
         let mut s = NpcStore::new(cfg());
         let awards = replay(&mut s, vec![killed(key(1, 99), Some(PLAYER), 1060.0)]);
-        assert!(awards.is_empty());
+        // facts come from the message: 10 + 0.5 * 60 = 40
+        assert_eq!(awards, vec![Award { player: PLAYER, points: 40 }]);
         assert_eq!(s.alive_count(), 0);
+    }
+
+    #[test]
+    fn duplicate_kill_of_unseen_npc_awards_once() {
+        let mut s = NpcStore::new(cfg());
+        let awards = replay(
+            &mut s,
+            vec![
+                killed(key(1, 99), Some(PLAYER), 1060.0),
+                killed(key(1, 99), Some(PLAYER), 1060.0),
+            ],
+        );
+        assert_eq!(awards.len(), 1);
+    }
+
+    #[test]
+    fn unseen_npc_kill_without_player_awards_nothing() {
+        let mut s = NpcStore::new(cfg());
+        let awards = replay(&mut s, vec![killed(key(1, 99), None, 1060.0)]);
+        assert!(awards.is_empty());
     }
 
     #[test]
@@ -233,8 +275,9 @@ mod tests {
                 killed(key(2, 5), Some(PLAYER), 1060.0),
             ],
         );
-        assert!(awards.is_empty());
-        assert_eq!(s.alive_count(), 1); // boot 1's NPC is untouched
+        // Boot 2's kill is scored from its own message; boot 1's NPC is untouched.
+        assert_eq!(awards.len(), 1);
+        assert_eq!(s.alive_count(), 1);
     }
 
     #[test]
@@ -291,6 +334,7 @@ mod tests {
                 killed(key(1, 6), Some(PLAYER), 1070.0),
             ],
         );
+        // Spawn facts win over the message: 10 + 0.5 * 60 = 40
         assert_eq!(awards, vec![Award { player: PLAYER, points: 40 }]);
         assert_eq!(s.alive_count(), 1);
     }
