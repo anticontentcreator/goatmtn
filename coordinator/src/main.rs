@@ -1,3 +1,5 @@
+mod score;
+mod store;
 fn main() {
     println!("coordinator starting");
 }

@@ -1,6 +1,0 @@
-GOAT MOUNTAIN ROADMAP
-
-	0x01. Legends
-		Carbon Loader for Custom NPCs and Support
-		Implement Custom DB for Recoding Player Scores
-		Attach 
