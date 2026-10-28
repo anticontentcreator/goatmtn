@@ -10,6 +10,7 @@
 - Kill attribution: last hit by a player. NPC, environmental and self kills award nothing.
 - Time-alive term is linear, config-driven (k). No cap for now.
 - Inputs: loadout (snapshot at spawn), prefab-based difficulty table, time alive.
+Score weights are placeholders (base 10, k = 0.01/s, all multipliers 1.0, uncapped); to be tuned when the score system is extended.ca
 
 ## Plugin references
 Game: Assembly-CSharp, UnityEngine.CoreModule, Facepunch.UnityEngine, Facepunch.Network, Rust.Data

@@ -65,9 +65,43 @@ pub fn score_kill(cfg: &ScoreConfig, kill: &KillFacts) -> Option<Award> {
     Some(Award { player, points })
 }
 
+impl ScoreConfig {
+    /// Placeholder weights. Every multiplier is 1.0 on purpose: the structure is in
+    /// place, the tuning is not. Prefab keys are the ShortPrefabName values seen on rtest.
+    pub fn placeholder() -> Self {
+        let one = |names: &[&str]| -> HashMap<String, f64> {
+            names.iter().map(|n| (n.to_string(), 1.0)).collect()
+        };
+        ScoreConfig {
+            base_points: 10.0,
+            prefab_mult: one(&[
+                "scientistnpc_rhib",
+                "scientistnpc_ptboat",
+                "scientistnpc_patrol",
+                "scientistnpc_roam",
+                "scientistnpc_roamtethered",
+            ]),
+            default_prefab_mult: 1.0,
+            loadout_mult: one(&["Science", "Scientist 2"]),
+            default_loadout_mult: 1.0,
+            points_per_second: 0.01,
+            max_seconds: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn placeholder_config_pays_base_plus_small_time_bonus() {
+        let c = ScoreConfig::placeholder();
+        // 10 base, no time
+        assert_eq!(points(&c, &kill("scientistnpc_rhib", "Science", 0.0)), 10);
+        // 10 + 0.01 * 3600 = 46
+        assert_eq!(points(&c, &kill("scientistnpc_rhib", "Science", 3600.0)), 46);
+    }
 
     // Fixture values chosen to be exact in f64. They are NOT the production table.
     fn cfg() -> ScoreConfig {

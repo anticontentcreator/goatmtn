@@ -13,6 +13,12 @@ Last updated: 2026-10-27. Source of truth for what is verified vs. assumed. Upda
 - Server log to watch: `/home/rust/server/gm_server.log` (real time). Carbon also writes `carbon/logs/Carbon.Core.log`.
 - Decompiling: `ilspycmd` shim is `%USERPROFILE%\.dotnet\tools\ilspycmd.cmd` (not `.exe`). Output goes to `E:\Code\dev\decomp`, outside the repo (do not commit decompiled game source).
 
+## Verified by compile + observation (GoatHello v0.0.6 on rtest)
+- OnEntityDeath(BaseCombatEntity, HitInfo) fires for ScientistNPC player kills (6 observed: patrol, roam, roamtethered).
+- HitInfo.Initiator / InitiatorPlayer, BasePlayer.IsNpc, BasePlayer.userID compile and return expected values for player kills.
+- At hook time dead=True and inventory is intact.
+- loadout=Scientist 2 across patrol/roam/roamtethered with differing belts (mp5 vs lr300).
+
 ## Verified by compile + observation (GoatHello v0.0.2 on rtest)
 - `CarbonPlugin` base class, `OnEntitySpawned(BaseNetworkable)` hook, `ScientistNPC` cast.
 - `npc.net.ID`, `npc.transform.position`, `npc.ShortPrefabName`.
@@ -27,6 +33,8 @@ Last updated: 2026-10-27. Source of truth for what is verified vs. assumed. Upda
 - The game has its own `Inventory.LoadLoadout(...)`, `inventory.GiveDefaultItems()` and `inventory.Strip()` in `BasePlayer` (usage seen around lines 12340, 12525, 12533 of `BasePlayer.cs`; not yet read in detail).
 - BaseCombatEntity.OnDied(HitInfo info) at line 883 and Die(HitInfo info = null) at line 902, both public virtual. info may be null.
 - HitInfo.Initiator is a public BaseEntity field. HitInfo.InitiatorPlayer is a BasePlayer property returning Initiator.ToPlayer() (null guard at line 84).
+- BaseCombatEntity.Die returns early if IsDead(); sets health=0, lifestate=Dead; calls TryDropCorpse(info) then OnDied(info). OnDied calls Kill(DestroyMode.Gib) unless a component vetoes.
+- Die itself filters real players with info.InitiatorPlayer != null && !info.InitiatorPlayer.IsNpc, so InitiatorPlayer can be an NPC. DieInstantly() calls OnDied(null) with no HitInfo.
 
 ## Observations (rtest, ScientistNPC only)
 - 301 spawn lines logged across several plugin reloads (cumulative, not a rate).
@@ -41,7 +49,7 @@ Last updated: 2026-10-27. Source of truth for what is verified vs. assumed. Upda
 - `EquipTest` (0.25 s after init) likely reads belt slot 0 and activates it (`UpdateActiveItem`). Body not yet read.
 - If so, a gearset applied synchronously in `OnEntitySpawned` would be activated by `EquipTest`; applied later, we would need to activate the weapon ourselves.
 - Carbon dispatches OnEntityDeath(BaseCombatEntity, HitInfo) as in Oxide. Source: Oxide community thread, not Carbon docs.
-- NPCPlayer derives from BasePlayer, so InitiatorPlayer can be an NPC. Needs an NPCPlayer check before awarding.
+- NPCPlayer derives from BasePlayer, so InitiatorPlayer can be an NPC. confirmed by the game’s own IsNpc check
 
 ## Open questions
 - Why do some belts empty within 1 s (moved to main? NPC dead? another plugin? game logic)? v0.0.3 logs `loadout=`, `dead=`, `main=` and a 5 s snapshot to answer this.
@@ -49,7 +57,6 @@ Last updated: 2026-10-27. Source of truth for what is verified vs. assumed. Upda
 - Which NPC classes beyond `ScientistNPC` should F1 cover?
 - Kit selection key: `ShortPrefabName` (exact or prefix, e.g. `scientistnpc_cargo*`) is the current candidate.
 - How to enumerate live NPCs (needed for the reconnect replay).
-- Lines 880-960 of BaseCombatEntity.cs (what Die does around OnDied) not yet read.
 
 ## Next steps
 1. Deploy v0.0.3 to rtest, collect `kit@` lines, explain the empty belts.
@@ -59,3 +66,11 @@ Last updated: 2026-10-27. Source of truth for what is verified vs. assumed. Upda
 ## Cautions
 - `// VERIFY` convention: only remove a marker once the signature has compiled or been read from the decompile.
 - The v0.0.3 diagnostic logs 3 lines per NPC; keep it on rtest and off `main`.
+
+## UNSPECIFIED
+- Spawn table (net.ID -> prefab, loadout, spawn time) works: alive= and spawnLoadout= populated for post-load spawns.
+- Non-player deaths arrive with info == null (4 ptboat NPCs, same instant, alive=14.2s): no killer.
+- rhib NPCs lived ~3343 s before a player kill; time-alive reflects waiting, not difficulty.
+- GetLoadoutName: "Science" (rhib, ptboat), "Scientist 2" (patrol, roam, roamtethered); weapon varies within a loadout.
+- Belt empty at death: 3 of 4 ptboat (798530-54) and rhib 796443; cause still unknown.
+Open: NPC-on-NPC kill untested; despawn hook not verified; cause of the ptboat group death.
